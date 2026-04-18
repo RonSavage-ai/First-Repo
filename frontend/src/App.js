@@ -77,38 +77,26 @@ const ProductCard = ({ product, onClick }) => {
 
 // Product Detail Modal
 const ProductModal = ({ product, isOpen, onClose }) => {
-  const [directLink, setDirectLink] = useState(null);
   const [loadingLink, setLoadingLink] = useState(false);
-  const [linkError, setLinkError] = useState(null);
-
-  // Fetch direct link when modal opens
-  useEffect(() => {
-    if (isOpen && product?.immersive_token) {
-      setLoadingLink(true);
-      setLinkError(null);
-      setDirectLink(null);
-      
-      axios.get(`${API}/product-link`, {
-        params: { token: product.immersive_token }
-      })
-        .then(res => {
-          setDirectLink(res.data);
-        })
-        .catch(err => {
-          console.error("Failed to fetch direct link", err);
-          setLinkError("Could not fetch store link");
-        })
-        .finally(() => {
-          setLoadingLink(false);
-        });
-    }
-  }, [isOpen, product?.immersive_token]);
 
   if (!product) return null;
 
-  const handleGoToWebsite = () => {
-    if (directLink?.link) {
-      window.open(directLink.link, "_blank");
+  const handleGoToWebsite = async () => {
+    if (!product.immersive_token) return;
+    
+    setLoadingLink(true);
+    try {
+      const res = await axios.get(`${API}/product-link`, {
+        params: { token: product.immersive_token }
+      });
+      if (res.data?.link) {
+        window.open(res.data.link, "_blank", "noopener,noreferrer");
+      }
+    } catch (err) {
+      console.error("Failed to get link", err);
+      alert("Could not open store page. Please try another product.");
+    } finally {
+      setLoadingLink(false);
     }
   };
 
@@ -145,16 +133,18 @@ const ProductModal = ({ product, isOpen, onClose }) => {
             <div className="space-y-4 flex-1">
               {/* Price */}
               <div className="text-3xl font-bold text-emerald-400">
-                {directLink?.price || product.price || "Price unavailable"}
+                {product.price || "Price unavailable"}
               </div>
               
               {/* Store */}
-              <div className="flex items-center gap-2">
-                <span className="text-zinc-400 text-sm">Sold by</span>
-                <Badge className="bg-zinc-800 text-zinc-200 hover:bg-zinc-700">
-                  {directLink?.store || product.source || "Unknown"}
-                </Badge>
-              </div>
+              {product.source && (
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-400 text-sm">Sold by</span>
+                  <Badge className="bg-zinc-800 text-zinc-200 hover:bg-zinc-700">
+                    {product.source}
+                  </Badge>
+                </div>
+              )}
               
               {/* Rating */}
               {product.rating && (
@@ -191,15 +181,13 @@ const ProductModal = ({ product, isOpen, onClose }) => {
               data-testid="go-to-website-btn"
               className="w-full mt-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-semibold py-6 text-lg rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/25 disabled:opacity-50"
               onClick={handleGoToWebsite}
-              disabled={loadingLink || !directLink?.link}
+              disabled={loadingLink || !product.immersive_token}
             >
               {loadingLink ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                  Loading...
+                  Opening...
                 </>
-              ) : linkError ? (
-                "Link unavailable"
               ) : (
                 <>
                   <ExternalLink className="w-5 h-5 mr-2" />
