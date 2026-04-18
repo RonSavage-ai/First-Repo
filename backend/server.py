@@ -83,13 +83,16 @@ async def search_products(
     
     try:
         async with httpx.AsyncClient() as http_client:
+            # Append "clothing" to ensure results are clothing-related
+            clothing_query = f"{q} clothing apparel"
             params = {
                 "engine": "google_shopping",
-                "q": q,
+                "q": clothing_query,
                 "api_key": SERPAPI_KEY,
                 "num": num,
                 "gl": "us",
-                "hl": "en"
+                "hl": "en",
+                "tbs": "cat:166"  # Category filter for Apparel & Accessories
             }
             
             response = await http_client.get(
@@ -107,13 +110,16 @@ async def search_products(
             
             products = []
             for idx, item in enumerate(shopping_results):
+                # Get the actual product link - use product_link or link
+                product_url = item.get("product_link") or item.get("link") or ""
+                
                 product = ProductResult(
                     id=str(idx),
                     title=item.get("title", ""),
                     price=item.get("price", ""),
                     extracted_price=item.get("extracted_price"),
                     source=item.get("source", ""),
-                    link=item.get("link", ""),
+                    link=product_url,
                     thumbnail=item.get("thumbnail", ""),
                     rating=item.get("rating"),
                     reviews=item.get("reviews"),
