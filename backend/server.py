@@ -51,6 +51,7 @@ class ProductResult(BaseModel):
     rating: Optional[float] = None
     reviews: Optional[int] = None
     delivery: Optional[str] = None
+    immersive_token: Optional[str] = None  # Token to fetch direct store link
 
 class SearchResponse(BaseModel):
     products: List[ProductResult]
@@ -110,8 +111,8 @@ async def search_products(
             
             products = []
             for idx, item in enumerate(shopping_results):
-                # Get the actual product link - use product_link or link
-                product_url = item.get("product_link") or item.get("link") or ""
+                # Store the immersive token for fetching direct links later
+                immersive_token = item.get("immersive_product_page_token", "")
                 
                 product = ProductResult(
                     id=str(idx),
@@ -119,11 +120,12 @@ async def search_products(
                     price=item.get("price", ""),
                     extracted_price=item.get("extracted_price"),
                     source=item.get("source", ""),
-                    link=product_url,
+                    link="",  # Will be fetched via /product-link endpoint
                     thumbnail=item.get("thumbnail", ""),
                     rating=item.get("rating"),
                     reviews=item.get("reviews"),
-                    delivery=item.get("delivery", "")
+                    delivery=item.get("delivery", ""),
+                    immersive_token=immersive_token
                 )
                 products.append(product)
             
@@ -162,6 +164,57 @@ async def get_trending_searches():
         "wide leg trousers"
     ]
     return {"trending": trending}
+
+@api_router.get("/product-link")
+async def get_product_link(token: str = Query(..., description="Immersive product page token")):
+    """Get the direct store link for a product using its immersive token"""
+    
+    if not SERPAPI_KEY:
+        raise HTTPException(status_code=500, detail="SerpAPI key not configured")
+    
+    if not token:
+        raise HTTPException(status_code=400, detail="Token is required")
+    
+    try:
+        async with httpx.AsyncClient() as http_client:
+            params = {
+                "engine": "google_immersive_product",
+                "page_token": token,
+                "api_key": SERPAPI_KEY
+            }
+            
+            response = await http_client.get(
+                "https://serpapi.com/search",
+                params=params,
+                timeout=30.0
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail="Failed to fetch product details")
+            
+            data = response.json()
+            
+            # Get stores from product_results
+            if "product_results" in data and "stores" in data["product_results"]:
+                stores = data["product_results"]["stores"]
+                if stores and len(stores) > 0:
+                    # Return the first store's direct link
+                    first_store = stores[0]
+                    return {
+                        "link": first_store.get("link", ""),
+                        "store": first_store.get("name", ""),
+                        "price": first_store.get("price", "")
+                    }
+            
+            raise HTTPException(status_code=404, detail="No direct link found for this product")
+            
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Request timed out")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Product link error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/search-history", response_model=List[SearchHistory])
 async def get_search_history(limit: int = Query(10, ge=1, le=50)):

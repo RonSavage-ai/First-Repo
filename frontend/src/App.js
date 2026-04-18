@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import "@/App.css";
 import axios from "axios";
-import { Search, ExternalLink, Star, Truck, X, Sparkles, TrendingUp, Clock } from "lucide-react";
+import { Search, ExternalLink, Star, Truck, Sparkles, TrendingUp } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -77,7 +77,40 @@ const ProductCard = ({ product, onClick }) => {
 
 // Product Detail Modal
 const ProductModal = ({ product, isOpen, onClose }) => {
+  const [directLink, setDirectLink] = useState(null);
+  const [loadingLink, setLoadingLink] = useState(false);
+  const [linkError, setLinkError] = useState(null);
+
+  // Fetch direct link when modal opens
+  useEffect(() => {
+    if (isOpen && product?.immersive_token) {
+      setLoadingLink(true);
+      setLinkError(null);
+      setDirectLink(null);
+      
+      axios.get(`${API}/product-link`, {
+        params: { token: product.immersive_token }
+      })
+        .then(res => {
+          setDirectLink(res.data);
+        })
+        .catch(err => {
+          console.error("Failed to fetch direct link", err);
+          setLinkError("Could not fetch store link");
+        })
+        .finally(() => {
+          setLoadingLink(false);
+        });
+    }
+  }, [isOpen, product?.immersive_token]);
+
   if (!product) return null;
+
+  const handleGoToWebsite = () => {
+    if (directLink?.link) {
+      window.open(directLink.link, "_blank");
+    }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -112,18 +145,16 @@ const ProductModal = ({ product, isOpen, onClose }) => {
             <div className="space-y-4 flex-1">
               {/* Price */}
               <div className="text-3xl font-bold text-emerald-400">
-                {product.price || "Price unavailable"}
+                {directLink?.price || product.price || "Price unavailable"}
               </div>
               
               {/* Store */}
-              {product.source && (
-                <div className="flex items-center gap-2">
-                  <span className="text-zinc-400 text-sm">Sold by</span>
-                  <Badge className="bg-zinc-800 text-zinc-200 hover:bg-zinc-700">
-                    {product.source}
-                  </Badge>
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                <span className="text-zinc-400 text-sm">Sold by</span>
+                <Badge className="bg-zinc-800 text-zinc-200 hover:bg-zinc-700">
+                  {directLink?.store || product.source || "Unknown"}
+                </Badge>
+              </div>
               
               {/* Rating */}
               {product.rating && (
@@ -158,12 +189,23 @@ const ProductModal = ({ product, isOpen, onClose }) => {
             {/* CTA Button */}
             <Button
               data-testid="go-to-website-btn"
-              className="w-full mt-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-semibold py-6 text-lg rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/25"
-              onClick={() => window.open(product.link, "_blank")}
-              disabled={!product.link}
+              className="w-full mt-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-semibold py-6 text-lg rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/25 disabled:opacity-50"
+              onClick={handleGoToWebsite}
+              disabled={loadingLink || !directLink?.link}
             >
-              <ExternalLink className="w-5 h-5 mr-2" />
-              Go to Website
+              {loadingLink ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                  Loading...
+                </>
+              ) : linkError ? (
+                "Link unavailable"
+              ) : (
+                <>
+                  <ExternalLink className="w-5 h-5 mr-2" />
+                  Go to Website
+                </>
+              )}
             </Button>
           </div>
         </div>
