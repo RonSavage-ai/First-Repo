@@ -82,22 +82,27 @@ const ProductModal = ({ product, isOpen, onClose }) => {
   if (!product) return null;
 
   const handleGoToWebsite = async () => {
-    if (!product.immersive_token) return;
-    
-    setLoadingLink(true);
-    try {
-      const res = await axios.get(`${API}/product-link`, {
-        params: { token: product.immersive_token }
-      });
-      if (res.data?.link) {
-        window.open(res.data.link, "_blank", "noopener,noreferrer");
+    // If we have a token, try to get the direct link
+    if (product.immersive_token) {
+      setLoadingLink(true);
+      try {
+        const res = await axios.get(`${API}/product-link`, {
+          params: { token: product.immersive_token }
+        });
+        if (res.data?.link) {
+          window.open(res.data.link, "_blank", "noopener,noreferrer");
+          setLoadingLink(false);
+          return;
+        }
+      } catch (err) {
+        console.error("Failed to get link", err);
       }
-    } catch (err) {
-      console.error("Failed to get link", err);
-      alert("Could not open store page. Please try another product.");
-    } finally {
       setLoadingLink(false);
     }
+    
+    // Fallback: search Google Shopping for this product
+    const searchQuery = encodeURIComponent(product.title + " " + (product.source || ""));
+    window.open(`https://www.google.com/search?tbm=shop&q=${searchQuery}`, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -176,12 +181,12 @@ const ProductModal = ({ product, isOpen, onClose }) => {
               )}
             </div>
             
-            {/* CTA Button */}
+            {/* CTA Button - Always enabled */}
             <Button
               data-testid="go-to-website-btn"
-              className="w-full mt-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-semibold py-6 text-lg rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/25 disabled:opacity-50"
+              className="w-full mt-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-semibold py-6 text-lg rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/25"
               onClick={handleGoToWebsite}
-              disabled={loadingLink || !product.immersive_token}
+              disabled={loadingLink}
             >
               {loadingLink ? (
                 <>
